@@ -101,7 +101,8 @@ def getSeacrchStrings(n):
     stringsneg=[s+'_NEG' for s in searchstrings]
     searchstrings.extend(stringsneg)
     searchstrings.extend(stringspos)
-    
+    BackFill.extend(BackFill)
+    BackFill.extend(BackFill)
     firstTimeFlag=True
     while todo:
         #By Default the T0, T1, and T2 are set to 0.  
@@ -174,6 +175,7 @@ def getSeacrchStrings(n):
     else:
        GapFilling=True    
      #IF the user has chosen to backfill, set T0 to the first tweet ever 
+     
     if BackFill[n]==1 and not os.path.isfile(searchstring +'GapFile.csv'):
         T2='False'        
         GapFilling=False
@@ -183,6 +185,8 @@ def getSeacrchStrings(n):
     
 DefaultWaitTime=60*10  #If no tweets are found the search is paused.  Reduce this if you want fast response to a sudden event people start tweeting about - BE AWARE OF BEING RATE LIMITED THOUGH
 DefaultWaitTimeNoTweets=4*60
+DefaultWaitTimeNoTweetsAtt=15*60
+
 debugUser='YourUsername'  #If YourUsername is found in the search it will flash up on the screen!
 
 optimalNumberOfTweets=70 #Aim to record this number of tweets each time (not paused if more than this nubmer).
@@ -329,10 +333,16 @@ while todo:
         else:
 #No results were obtiined so we need to pause this for a little while
             if not GapFilling:
+                dwait=DefaultWaitTimeNoTweets
+                if attitudeFilter==1:
+                    dwait=DefaultWaitTimeNoTweetsAtt
+                if attitudeFilter==2:
+                    dwait=DefaultWaitTimeNoTweetsAtt
+
                 with open(SearchString +'Pausing.csv','w') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['Pause until',ttime.time()+DefaultWaitTimeNoTweets])
-                    print('Pausing ' + SearchString + ' as no tweets seen.')
+                    writer.writerow(['Pause until',ttime.time()+dwait])
+                    print('Pausing ' + SearchString + ' as no tweets seen for ' + str(int(dwait/60)) + ' minutes.')
             else:
 #                If you were gapfilling and returned 0, this means that the gap is filled so run along.  And write the T0,T1,T2 to a file so the functions can obtain it. 
                 T0=0
