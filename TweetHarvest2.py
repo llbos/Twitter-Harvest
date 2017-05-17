@@ -94,6 +94,15 @@ def getSeacrchStrings(n):
 #    Get the search strings
     imp.reload(setupSearchStrings)
     searchstrings,BackFill=setupSearchStrings.main()
+    attFilt=[0]*len(BackFill)
+    attFilt.extend([1]*len(BackFill))
+    attFilt.extend([2]*len(BackFill))
+    stringspos=[s+'_POS' for s in searchstrings]
+    stringsneg=[s+'_NEG' for s in searchstrings]
+    searchstrings.extend(stringsneg)
+    searchstrings.extend(stringspos)
+    BackFill.extend(BackFill)
+    BackFill.extend(BackFill)
     firstTimeFlag=True
     while todo:
         #By Default the T0, T1, and T2 are set to 0.  
@@ -125,6 +134,7 @@ def getSeacrchStrings(n):
         if stringPause[n]<(ttime.time()-.1):
             
             searchstring=searchstrings[n]
+            attitudeFilter=attFilt[n]
             todo=False
         else:
 #            print('Pausing')
@@ -165,15 +175,18 @@ def getSeacrchStrings(n):
     else:
        GapFilling=True    
      #IF the user has chosen to backfill, set T0 to the first tweet ever 
+     
     if BackFill[n]==1 and not os.path.isfile(searchstring +'GapFile.csv'):
         T2='False'        
         GapFilling=False
         print('FirstTIMER')
 #    print(['T2: ' + str(T2)])
-    return searchstring,n,T0,T1,T2,GapFilling
+    return searchstring,n,T0,T1,T2,GapFilling, attitudeFilter
     
-DefaultWaitTime=60*13  #If no tweets are found the search is paused.  Reduce this if you want fast response to a sudden event people start tweeting about - BE AWARE OF BEING RATE LIMITED THOUGH
-DefaultWaitTimeNoTweets=2*60
+DefaultWaitTime=60*10  #If no tweets are found the search is paused.  Reduce this if you want fast response to a sudden event people start tweeting about - BE AWARE OF BEING RATE LIMITED THOUGH
+DefaultWaitTimeNoTweets=4*60
+DefaultWaitTimeNoTweetsAtt=15*60
+
 debugUser='YourUsername'  #If YourUsername is found in the search it will flash up on the screen!
 
 optimalNumberOfTweets=70 #Aim to record this number of tweets each time (not paused if more than this nubmer).
@@ -205,12 +218,23 @@ while todo:
         accounts,nTwitterAccounts,tsN=getTwitterAccountDetails(nTwitterAccounts,tsN)        
         #Get Twitter Search Term
         account=accounts[nTwitterAccounts]
-        SearchString,nSearchStrings,T0,T1,T2,GapFilling=getSeacrchStrings(nSearchStrings)
-
+        SearchString,nSearchStrings,T0,T1,T2,GapFilling,attitudeFilter=getSeacrchStrings(nSearchStrings)
+        keywords=SearchString
         #Create a search order
         tso = TwitterSearchOrder()
         tso.remove_all_filters()
-        tso.set_keywords([SearchString]) # let's define all words we would like to have a look for
+         # let's define all words we would like to have a look for
+        if attitudeFilter==1:
+            ###Attitude filter is negative so we need to chop off the Neg part of searchstring
+            keywords=SearchString[:-4]
+            tso.set_negative_attitude_filter()
+
+        if attitudeFilter==2:
+            ###Attitude filter is positive so we need to chop off the Neg part of searchstring
+            keywords=SearchString[:-4]
+            tso.set_positive_attitude_filter()
+            
+        tso.set_keywords([keywords])
         
 #                         Might want to CHANGE THIS!!!!!!
         tso.set_language('en')
@@ -309,9 +333,16 @@ while todo:
         else:
 #No results were obtiined so we need to pause this for a little while
             if not GapFilling:
+                dwait=DefaultWaitTimeNoTweets
+                if attitudeFilter==1:
+                    dwait=DefaultWaitTimeNoTweetsAtt
+                if attitudeFilter==2:
+                    dwait=DefaultWaitTimeNoTweetsAtt
+
                 with open(SearchString +'Pausing.csv','w') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['Pause until',ttime.time()+DefaultWaitTimeNoTweets])
+                    writer.writerow(['Pause until',ttime.time()+dwait])
+                    print('Pausing ' + SearchString + ' as no tweets seen for ' + str(int(dwait/60)) + ' minutes.')
             else:
 #                If you were gapfilling and returned 0, this means that the gap is filled so run along.  And write the T0,T1,T2 to a file so the functions can obtain it. 
                 T0=0
@@ -359,6 +390,40 @@ while todo:
                         data=[tweet['user']['screen_name'],tweet['id'],tweet['created_at'],tweet['retweet_count'],tweet['user']['location'],tweet['text'],epochstart]
                         
                         writer.writerow(data)
+                        p=data
+                        format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative});"""
+                        sql = "SELECT * FROM tweets \
+                               WHERE id = '%d'" % (p[1])
+                        cursor.execute(sql) 
+                        results = cursor.fetchall()
+                        posfilt=0                            
+                        negfilt=0
+                        if attitudeFilter==1:
+                                    ###Attitude filter is negative so we need to chop off the Neg part of searchstring
+                            negfilt=1
+                        if attitudeFilter==2:
+                                    ###Attitude filter is positive so we need to chop off the Neg part of searchstring
+                            posfilt=1
+                        if len(results)==0:
+                            #Insert the result into the database
+                            p.append[posfilt]
+                            p.append[negfilt]
+                            format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative});"""
+                            sql_command = format_str.format(id=int(p[1]), screen_name=p[0], text=p[5], retweet_count = int(p[3]),location = p[4], epoch=float(p[6]),positive=p[7],negative=p[8])
+                            cursor.execute(sql_command)
+                        else:
+                            #Modify the entry.
+                                                        
+                            if negfilt>1:
+                                negfilt=1
+                            if posfilt>1:
+                                posfilt=1
+                            sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
+                            cursor.execute(sql)
+                            
+                        connection.commit()
+                        connection.close()
+
                         #Purely to check that the softwre is finding all the tweets.  Check to see if your username is found
                         if db:                            
                             if tweet['user']['screen_name']==debugUser:
@@ -418,18 +483,19 @@ while todo:
                             
         #No Tweets obtained so Pause that search for a while
         else:
-            with open(SearchString +'Pausing.csv','w') as f:
-                if GapFilling:
-                    print("Gap Filled.....")   
-                    writer = csv.writer(f)
-                    writer.writerow(['Searching for '+ SearchString+ ' paused for some time until ',ttime.time()+0])
-                
-                else:
-                    print("No tweets seen using %s about %s . Pausing for %i mins." % (str(account[0]),SearchString,DefaultWaitTimeNoTweets/60))   
-                    writer = csv.writer(f)
-                    writer.writerow(['Searching for '+ SearchString+ ' paused for some time until ',ttime.time()+DefaultWaitTimeNoTweets])
-                
-        
+            print('No Tweets to file')
+#            with open(SearchString +'Pausing.csv','w') as f:
+#                if GapFilling:
+#                    print("Gap Filled.....")   
+#                    writer = csv.writer(f)
+#                    writer.writerow(['Searching for '+ SearchString+ ' paused for some time until ',ttime.time()+0])
+#                
+#                else:
+#                    print("No tweets seen using %s about %s . Pausing for %i mins." % (str(account[0]),SearchString,DefaultWaitTimeNoTweets/60))   
+#                    writer = csv.writer(f)
+#                    writer.writerow(['Searching for '+ SearchString+ ' paused for some time until ',ttime.time()+DefaultWaitTimeNoTweets])
+#                
+#        
     except Exception as e:
 #         print(type(inst))    # the exception instance
 #         print(inst.args)      # arguments stored in .args
