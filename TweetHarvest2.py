@@ -15,6 +15,7 @@ import csv
 import time as ttime
 import sys
 from TwitterSearch import *
+import sqlite3 as lite
 
 
 
@@ -391,39 +392,46 @@ while todo:
                         
                         writer.writerow(data)
                         p=data
-                        format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative});"""
-                        sql = "SELECT * FROM tweets \
-                               WHERE id = '%d'" % (p[1])
-                        cursor.execute(sql) 
-                        results = cursor.fetchall()
-                        posfilt=0                            
-                        negfilt=0
-                        if attitudeFilter==1:
-                                    ###Attitude filter is negative so we need to chop off the Neg part of searchstring
-                            negfilt=1
-                        if attitudeFilter==2:
-                                    ###Attitude filter is positive so we need to chop off the Neg part of searchstring
-                            posfilt=1
-                        if len(results)==0:
-                            #Insert the result into the database
-                            p.append[posfilt]
-                            p.append[negfilt]
+                        connection = lite.connect('twit.db')
+                        try:
                             format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative});"""
-                            sql_command = format_str.format(id=int(p[1]), screen_name=p[0], text=p[5], retweet_count = int(p[3]),location = p[4], epoch=float(p[6]),positive=p[7],negative=p[8])
-                            cursor.execute(sql_command)
-                        else:
-                            #Modify the entry.
-                                                        
-                            if negfilt>1:
+                            sql = "SELECT * FROM tweets \
+                                   WHERE id = '%d'" % (p[1])
+                            cursor.execute(sql) 
+                            results = cursor.fetchall()
+                            posfilt=0                            
+                            negfilt=0
+                            if attitudeFilter==1:
+                                        ###Attitude filter is negative so we need to chop off the Neg part of searchstring
                                 negfilt=1
-                            if posfilt>1:
+                            if attitudeFilter==2:
+                                        ###Attitude filter is positive so we need to chop off the Neg part of searchstring
                                 posfilt=1
-                            sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
-                            cursor.execute(sql)
-                            
-                        connection.commit()
-                        connection.close()
-
+                            if len(results)==0:
+                                #Insert the result into the database
+                                p.append[posfilt]
+                                p.append[negfilt]
+                                format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative,search) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative},{search});"""
+                                sql_command = format_str.format(id=int(p[1]), screen_name=p[0], text=p[5], retweet_count = int(p[3]),location = p[4], epoch=float(p[6]),positive=p[7],negative=p[8],search=keywords)
+                                cursor.execute(sql_command)
+                            else:
+                                #Modify the entry.
+                                                            
+                                if negfilt>1:
+                                    negfilt=1
+                                if posfilt>1:
+                                    posfilt=1
+                                sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
+                                cursor.execute(sql)
+                                
+                            connection.commit()
+                            connection.close()
+                        except Exception as e:
+                            print(e)
+                            connection.commit()
+                            connection.close()
+                            break
+                        
                         #Purely to check that the softwre is finding all the tweets.  Check to see if your username is found
                         if db:                            
                             if tweet['user']['screen_name']==debugUser:
