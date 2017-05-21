@@ -240,7 +240,6 @@ db=True
 todo=True
 
 
-
 #Loop Over Following
 try:
     sys.setdefaultencoding('utf8')
@@ -359,8 +358,7 @@ while todo:
                                 t_start=t_start[:20]+t_start[-4:]
                                 epochstart = int(ttime.mktime(ttime.strptime(t_start, pattern)))
                                 data=[tweet['user']['screen_name'],tweet['id'],tweet['created_at'],tweet['retweet_count'],tweet['user']['location'],tweet['text'],epochstart]
-        #                        print("writing data")
-        #                        print(nTweets)
+
                                 writer.writerow(data)
                                 p=data
                                 
@@ -370,6 +368,102 @@ while todo:
                                    WHERE id = '%d'" % (p[1])
                                 cursor.execute(sql) 
                                 results = cursor.fetchall()
+                                negfilt=0
+                                posfilt=0
+
+                                if attitudeFilter==1:
+                                            ###Attitude filter is negative so we need to chop off the Neg part of searchstring
+                                    negfilt=1
+                                if attitudeFilter==2:
+                                            ###Attitude filter is positive so we need to chop off the Neg part of searchstring
+                                    posfilt=1
+                                # If the tweet already exist it may be that the tweet has now been found using the attitude filtering option so that tweet just needs updating.
+                                if len(results)==0:
+                                    
+                                    #Insert the result into the database
+                                    p.append(posfilt)
+                                    p.append(negfilt)
+        #                            format_str = """INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative,search) VALUES ({id}, "{screen_name}", "{text}", "{retweet_count}", "{location}","{epoch}",{positive},{negative},"{search}");"""
+        #                            sql_command = format_str.format(id=int(p[1]), screen_name=p[0], text=repr(p[5]), retweet_count = int(p[3]),location = p[4], epoch=float(p[6]),positive=p[7],negative=p[8],search=str(keywords))
+                                    textt=p[5]
+                                    textt=textt.replace("\'"," SL")
+                                    textt=textt.replace("\""," SLd")
+                                    keywordst=keywords
+                                    keywordst.replace("\'"," SL")
+                                    keywordst.replace("\""," SLd")
+                                    screen_namet=p[0]
+                                    screen_namet.replace("\'"," SL")
+                                    screen_namet.replace("\""," SLd")
+                                    locationt=p[4]
+                                    locationt.replace("\'"," SL")
+                                    locationt.replace("\""," Sld")
+                                    
+
+                                    format_str = 'INSERT INTO tweets (id, screen_name, text, retweet_count, location,epoch,positive,negative,search,harvested_at) VALUES (%i, "%s", "%s", %i, "%s",%f,%i,%i,"%s",%f)'
+        #                                                       sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
+                                    try:
+                                        # sqlstr=format_str % (int(p[1]), re.escape(screen_namet), re.escape(textt),  int(p[3]), re.escape(locationt), float(p[6]),p[7],p[8],re.escape(str(keywordst)))
+        #                               print(sqlstr)
+                                        cursor.execute(format_str % (int(p[1]), re.escape(screen_namet), re.escape(textt),  int(p[3]), re.escape(locationt), float(p[6]),p[7],p[8],re.escape(str(keywordst)),ttime.time()))
+                                    except Exception as e:
+                                        format_str = 'INSERT INTO tweets (id, epoch,positive,negative,search,harvested_at) VALUES (%i,%f,%i,%i,"%s",%f)'
+                                        qlstr=format_str# % (int(p[1]), float(p[6]),p[7],p[8],re.escape(str(keywordst)))
+        #                               print(sqlstr)
+                                        cursor.execute(qlstr%(int(p[1]), float(p[6]),p[7],p[8],re.escape(str(keywordst)),ttime.time()))
+                                        with open('TweetsFailedToSendToDB.csv', 'a',encoding='utf-8') as ff:
+                                            writer = csv.writer(ff)
+                                            writer.writerow([data,str(datetime.datetime.now())])
+
+                                        errstring=('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e), e)
+                                        with open('errorfile.csv','a') as ferr:
+                                            writer = csv.writer(ferr)
+                                            writer.writerow([str(errstring)+' at ' +str(datetime.datetime.now())+ ' SQL STRING= ']) 
+                                        
+                                    if verbosity_level>1:
+                                        print('New Tweet Added')
+
+  
+         
+                                                                           
+                                else:
+                                    #Modify the entry.
+                                    posfilt=posfilt+results[0][6]                            
+                                    negfilt=negfilt+results[0][7]                            
+                                    if negfilt>1:
+                                        negfilt=1
+                                    if posfilt>1:
+                                        posfilt=1
+                                    sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
+        #                            print(sql)
+
+                                    cursor.execute("UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1]))
+                                    # print('updated')
+                                    if verbosity_level>1:
+                                        print('New Tweet updated')    
+                                
+                                #Purely to check that the softwre is finding all the tweets.  Check to see if your username is found
+                                if db:                            
+                                    if tweet['user']['screen_name']==debugUser:
+                                        for NN in range(0,20):
+                                            print("SEEN YOUR TWEET: %s" % (tweet['text']))
+                            if 'retweeted_status' in tweet:             
+                                tweet=tweet['retweeted_status']
+                                sqlstr=''
+                                geo=''
+                                t_start=tweet['created_at']
+                                t_start=t_start[:20]+t_start[-4:]
+                                epochstart = int(ttime.mktime(ttime.strptime(t_start, pattern)))
+                                data=[tweet['user']['screen_name'],tweet['id'],tweet['created_at'],tweet['retweet_count'],tweet['user']['location'],tweet['text'],epochstart]
+                                p=data
+                                
+
+                                
+                                sql = "SELECT * FROM tweets \
+                                   WHERE id = '%d'" % (p[1])
+                                cursor.execute(sql) 
+                                results = cursor.fetchall()
+                                # pdb.set_trace()
+
                                 posfilt=0                            
                                 negfilt=0
                                 if attitudeFilter==1:
@@ -417,28 +511,35 @@ while todo:
                                         with open('errorfile.csv','a') as ferr:
                                             writer = csv.writer(ferr)
                                             writer.writerow([str(errstring)+' at ' +str(datetime.datetime.now())+ ' SQL STRING= ']) 
+                                    if verbosity_level>1:
+                                        print('Old Retweet Added')
                                         
                                         
          
                                                                            
                                 else:
                                     #Modify the entry.
-                                                                
+                                    posfilt=posfilt+results[0][6]                            
+                                    negfilt=negfilt+results[0][7]                            
                                     if negfilt>1:
                                         negfilt=1
                                     if posfilt>1:
                                         posfilt=1
+                                 
                                     sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
         #                            print(sql)
 
                                     cursor.execute("UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1]))
-                                    # print('updated')    
+                                    if verbosity_level>1:
+                                        print('Old Retweet updated')
+
                                 
                                 #Purely to check that the softwre is finding all the tweets.  Check to see if your username is found
                                 if db:                            
                                     if tweet['user']['screen_name']==debugUser:
                                         for NN in range(0,20):
                                             print("SEEN YOUR TWEET: %s" % (tweet['text']))
+
                         if verbosity_level>1:
                             print("committing to DB")
                         connection.commit()
@@ -541,7 +642,7 @@ while todo:
                                 T0=T2#The Previous Iteration's T2 is the start of the gap.
                                 T2=response['content']['statuses'][0]['id']
                             else:
-                                break  
+                                pass  
                             
                     else:
                         
@@ -633,12 +734,12 @@ while todo:
             print("Some unexpected errorrate limit reached.  Parking for %i minutes. " % ((float(response['meta']['x-rate-limit-reset'])+1-ttime.time())/60))
         except:
             print("Unkown error.  Parking for %i minutes. " % (sleeptime/60))
-            break
+            
         #And send that to disk.                                                                  
         with open(account[0] +'Pausing.csv','w') as f:
                     writer = csv.writer(f)
                     writer.writerow(['Pause Until:' , str(sleeptime+1)]) 
-        response
+        
         # break
 
         
