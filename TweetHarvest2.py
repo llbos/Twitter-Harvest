@@ -8,7 +8,7 @@ Created on Mon Apr 17 14:05:08 2017
 
 import pdb
 import imp 
-import setupSearchStrings 
+import setupSearchStrings
 import setupTwitterAccounts
 import os 
 import csv 
@@ -435,8 +435,11 @@ while todo:
                                         posfilt=1
                                     sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
         #                            print(sql)
-
-                                    cursor.execute("UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1]))
+                                    if int(p[3])>=results[0][3]:
+                                        retweetCount=int(p[3])
+                                    else:
+                                        retweetCount=results[0][3]
+                                    cursor.execute("UPDATE tweets SET positive=%i, negative=%i,retweet_count=%i WHERE id =%i" % (posfilt,negfilt,retweetCount,p[1]))
                                     # print('updated')
                                     if verbosity_level>1:
                                         print('New Tweet updated')    
@@ -462,7 +465,7 @@ while todo:
                                    WHERE id = '%d'" % (p[1])
                                 cursor.execute(sql) 
                                 results = cursor.fetchall()
-                                # pdb.set_trace()
+#                                pdb.set_trace()
 
                                 posfilt=0                            
                                 negfilt=0
@@ -526,10 +529,14 @@ while todo:
                                     if posfilt>1:
                                         posfilt=1
                                  
-                                    sql="UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1])
+                                    sql="UPDATE tweets SET positive=%i, negative=%i, WHERE id =%i" % (posfilt,negfilt,p[1])
         #                            print(sql)
+                                    if int(p[3])>=results[0][3]:
+                                        retweetCount=int(p[3])
+                                    else:
+                                        retweetCount=results[0][3]
 
-                                    cursor.execute("UPDATE tweets SET positive=%i, negative=%i WHERE id =%i" % (posfilt,negfilt,p[1]))
+                                    cursor.execute("UPDATE tweets SET positive=%i, negative=%i,retweet_count=%i WHERE id =%i" % (posfilt,negfilt,retweetCount,p[1]))
                                     if verbosity_level>1:
                                         print('Old Retweet updated')
 
@@ -642,7 +649,7 @@ while todo:
                                 T0=T2#The Previous Iteration's T2 is the start of the gap.
                                 T2=response['content']['statuses'][0]['id']
                             else:
-                                pass  
+                                break  
                             
                     else:
                         
@@ -734,12 +741,12 @@ while todo:
             print("Some unexpected errorrate limit reached.  Parking for %i minutes. " % ((float(response['meta']['x-rate-limit-reset'])+1-ttime.time())/60))
         except:
             print("Unkown error.  Parking for %i minutes. " % (sleeptime/60))
-            
+            break
         #And send that to disk.                                                                  
         with open(account[0] +'Pausing.csv','w') as f:
                     writer = csv.writer(f)
                     writer.writerow(['Pause Until:' , str(sleeptime+1)]) 
-        
+        response
         # break
 
         
